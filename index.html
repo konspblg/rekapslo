@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Rekap SLO — UPT Probolinggo PLN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Lexend:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<!-- Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loading-logo">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+    </svg>
+  </div>
+  <div class="loading-title">Dashboard Rekap SLO</div>
+  <div class="loading-sub">Memuat data dari Google Sheets...</div>
+  <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+</div>
+
+<!-- SIDEBAR OVERLAY (mobile) -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- APP LAYOUT -->
+<div class="app-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="sb-logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+      </div>
+      <div class="sb-brand-text">
+        <div class="sb-brand-name">SLO Dashboard</div>
+        <div class="sb-brand-sub">UPT Probolinggo</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-label">Menu Utama</div>
+        <a class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </a>
+        <a class="nav-item" data-page="data" onclick="navigate('data')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Data SLO
+          <span class="nav-badge" id="badge-warn" style="display:none">0</span>
+        </a>
+        <a class="nav-item" data-page="gi" onclick="navigate('gi')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          Gardu Induk
+          <span class="nav-badge" style="background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-bd)" id="sb-gi-count">—</span>
+        </a>
+        <a class="nav-item" data-page="trs" onclick="navigate('trs')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
+          Transmisi
+          <span class="nav-badge" style="background:var(--purple-bg);color:var(--purple);border:1px solid rgba(124,58,237,.2)" id="sb-trs-count">—</span>
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Informasi</div>
+        <a class="nav-item" data-page="about" onclick="navigate('about')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Tentang
+        </a>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="btn-theme" id="btn-theme" onclick="toggleTheme()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        Dark Mode
+      </button>
+    </div>
+  </aside>
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <button class="hamburger" onclick="openSidebar()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="topbar-title-group">
+      <div class="topbar-title">Dashboard Rekap SLO UPT Probolinggo</div>
+      <div class="topbar-sub">PT PLN (Persero) UIT JBM</div>
+    </div>
+    <div class="topbar-right">
+      <div class="last-update">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span id="last-update">Memuat...</span>
+      </div>
+      <button class="btn-refresh" id="btn-refresh" onclick="loadData()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Refresh
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main class="main" id="main-content">
+
+    <!-- ═══ PAGE: DASHBOARD ═══════════════════════ -->
+    <section class="page active fade-in" id="page-dashboard">
+      <div class="section-header">
+        <div class="section-title">Ringkasan Monitoring SLO</div>
+        <div class="section-sub">Data realtime dari Google Sheets · Gardu Induk &amp; Transmisi</div>
+      </div>
+
+      <!-- Stat Cards -->
+      <div class="stats-grid">
+        <div class="stat-card c-blue">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          </div>
+          <div class="stat-lbl">Total Data SLO</div>
+          <div class="stat-num" id="stat-total">—</div>
+          <div class="stat-sub">Seluruh aset terdaftar</div>
+        </div>
+        <div class="stat-card c-green">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="stat-lbl">Selesai / Berlaku</div>
+          <div class="stat-num" id="stat-selesai">—</div>
+          <div class="stat-sub">SLO aktif & valid</div>
+        </div>
+        <div class="stat-card c-yellow">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="stat-lbl">Dalam Proses</div>
+          <div class="stat-num" id="stat-proses">—</div>
+          <div class="stat-sub">Sedang diproses/pengajuan</div>
+        </div>
+        <div class="stat-card c-red">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div class="stat-lbl">Expired / Kritis</div>
+          <div class="stat-num" id="stat-expired">—</div>
+          <div class="stat-sub">Expired + mendekati habis</div>
+        </div>
+        <div class="stat-card c-blue">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          </div>
+          <div class="stat-lbl">Gardu Induk</div>
+          <div class="stat-num" id="stat-gi">—</div>
+          <div class="stat-sub">Aset GI terdaftar</div>
+        </div>
+        <div class="stat-card c-purple">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <div class="stat-lbl">Transmisi</div>
+          <div class="stat-num" id="stat-trs">—</div>
+          <div class="stat-sub">Aset Transmisi terdaftar</div>
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div class="progress-section">
+        <div class="progress-header">
+          <div>
+            <div class="progress-title">Progress Penyelesaian SLO</div>
+            <div style="font-size:12px;color:var(--text-3);margin-top:2px">Persentase aset dengan SLO selesai/berlaku</div>
+          </div>
+          <div class="progress-pct" id="progress-pct">0%</div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+        </div>
+        <div class="progress-legend">
+          <div class="pl-item"><div class="pl-dot" style="background:#16a34a"></div>Selesai</div>
+          <div class="pl-item"><div class="pl-dot" style="background:#d97706"></div>Proses</div>
+          <div class="pl-item"><div class="pl-dot" style="background:#94a3b8"></div>Belum</div>
+          <div class="pl-item"><div class="pl-dot" style="background:#dc2626"></div>Expired</div>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-card-title">
+            <div class="chart-dot"></div>
+            Distribusi Status SLO
+          </div>
+          <div class="chart-wrap">
+            <canvas id="chart-status"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">
+            <div class="chart-dot" style="background:var(--purple)"></div>
+            Progress per ULTG
+          </div>
+          <div class="chart-wrap">
+            <canvas id="chart-progress"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Table Preview -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-family:'Lexend',sans-serif;font-size:13px;font-weight:700;color:var(--text)">Data Terbaru</div>
+        <button class="btn-apply" onclick="navigate('data')" style="padding:7px 14px;font-size:11px">
+          Lihat Semua →
+        </button>
+      </div>
+      <div class="table-card">
+        <div class="tbl-wrap">
+          <table>
+            <thead id="tbl-head-preview"></thead>
+            <tbody id="tbl-body-preview"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ PAGE: DATA SLO ════════════════════════ -->
+    <section class="page fade-in" id="page-data">
+      <div class="section-header">
+        <div class="section-title">Data SLO Lengkap</div>
+        <div class="section-sub">Filter, cari, dan unduh data SLO seluruh aset</div>
+      </div>
+
+      <!-- Category Tabs -->
+      <div class="cat-tabs">
+        <button class="cat-tab active" data-cat="all" onclick="setCategoryFilter('all')">Semua Aset</button>
+        <button class="cat-tab" data-cat="gi" onclick="setCategoryFilter('gi')">Gardu Induk</button>
+        <button class="cat-tab" data-cat="trs" onclick="setCategoryFilter('trs')">Transmisi</button>
+      </div>
+
+      <!-- Filter -->
+      <div class="filter-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3);display:flex;align-items:center;gap:7px">
+            <div style="width:7px;height:7px;background:var(--accent);border-radius:50%"></div>
+            Filter Data
+          </div>
+          <button class="btn-reset" onclick="resetFilters()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Reset
+          </button>
+        </div>
+        <div class="filter-row">
+          <div class="fg" style="grid-column:1/-1;max-width:360px">
+            <label>Cari</label>
+            <div class="search-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="filter-search" placeholder="Nama aset, No. SLO, ULTG...">
+            </div>
+          </div>
+          <div class="fg">
+            <label>Status</label>
+            <select id="filter-status" onchange="onFilterChange()">
+              <option value="">Semua Status</option>
+              <option value="selesai">Selesai</option>
+              <option value="proses">Proses</option>
+              <option value="pending">Belum</option>
+              <option value="expired">Expired</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>ULTG / Lokasi</label>
+            <select id="filter-lokasi" onchange="onFilterChange()">
+              <option value="">Semua ULTG</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>Tahun</label>
+            <select id="filter-tahun" onchange="onFilterChange()">
+              <option value="">Semua Tahun</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-info" id="tbl-info">Memuat data...</div>
+          <div class="table-actions">
+            <button class="btn-export" onclick="exportExcel()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+              Excel
+            </button>
+            <button class="btn-export pdf" onclick="exportPDF()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="9" y2="22"/></svg>
+              PDF
+            </button>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead id="tbl-head"></thead>
+            <tbody id="tbl-body"></tbody>
+          </table>
+        </div>
+        <div id="pagination"></div>
+      </div>
+    </section>
+
+    <!-- ═══ PAGE: GARDU INDUK ════════════════════ -->
+    <section class="page fade-in" id="page-gi">
+      <div class="section-header">
+        <div class="section-title">Gardu Induk (GI)</div>
+        <div class="section-sub">Data SLO aset Gardu Induk UPT Probolinggo</div>
+      </div>
+
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stat-card c-blue" style="padding:14px 16px">
+          <div class="stat-lbl">Total GI</div>
+          <div class="stat-num" id="gi-total">—</div>
+        </div>
+        <div class="stat-card c-green" style="padding:14px 16px">
+          <div class="stat-lbl">Selesai</div>
+          <div class="stat-num" id="gi-selesai">—</div>
+        </div>
+        <div class="stat-card c-yellow" style="padding:14px 16px">
+          <div class="stat-lbl">Proses</div>
+          <div class="stat-num" id="gi-proses">—</div>
+        </div>
+        <div class="stat-card c-red" style="padding:14px 16px">
+          <div class="stat-lbl">Expired</div>
+          <div class="stat-num" id="gi-expired">—</div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-info" id="gi-tbl-info">—</div>
+          <div class="table-actions">
+            <button class="btn-export" onclick="exportCategoryExcel('gi')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Export Excel
+            </button>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead id="gi-tbl-head"></thead>
+            <tbody id="gi-tbl-body"></tbody>
+          </table>
+        </div>
+        <div id="gi-pagination"></div>
+      </div>
+    </section>
+
+    <!-- ═══ PAGE: TRANSMISI ══════════════════════ -->
+    <section class="page fade-in" id="page-trs">
+      <div class="section-header">
+        <div class="section-title">Transmisi</div>
+        <div class="section-sub">Data SLO aset Transmisi UPT Probolinggo</div>
+      </div>
+
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stat-card c-purple" style="padding:14px 16px">
+          <div class="stat-lbl">Total TRS</div>
+          <div class="stat-num" id="trs-total">—</div>
+        </div>
+        <div class="stat-card c-green" style="padding:14px 16px">
+          <div class="stat-lbl">Selesai</div>
+          <div class="stat-num" id="trs-selesai">—</div>
+        </div>
+        <div class="stat-card c-yellow" style="padding:14px 16px">
+          <div class="stat-lbl">Proses</div>
+          <div class="stat-num" id="trs-proses">—</div>
+        </div>
+        <div class="stat-card c-red" style="padding:14px 16px">
+          <div class="stat-lbl">Expired</div>
+          <div class="stat-num" id="trs-expired">—</div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-info" id="trs-tbl-info">—</div>
+          <div class="table-actions">
+            <button class="btn-export" onclick="exportCategoryExcel('trs')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Export Excel
+            </button>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead id="trs-tbl-head"></thead>
+            <tbody id="trs-tbl-body"></tbody>
+          </table>
+        </div>
+        <div id="trs-pagination"></div>
+      </div>
+    </section>
+
+    <!-- ═══ PAGE: TENTANG ════════════════════════ -->
+    <section class="page fade-in" id="page-about">
+      <div class="section-header">
+        <div class="section-title">Tentang Dashboard</div>
+        <div class="section-sub">Informasi sistem dan sumber data</div>
+      </div>
+
+      <div class="table-card" style="padding:28px">
+        <div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap">
+          <div class="sb-logo" style="width:56px;height:56px;border-radius:14px;flex-shrink:0">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <div>
+            <div style="font-family:'Lexend',sans-serif;font-size:20px;font-weight:800;color:var(--text)">Dashboard Rekap SLO</div>
+            <div style="font-size:13px;color:var(--text-3);margin-top:4px">UPT Probolinggo — PT PLN (Persero) UIT JBM</div>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-4);margin-bottom:8px">Sumber Data</div>
+            <div style="font-size:13px;color:var(--text-2);line-height:1.8">
+              <div>📊 Google Sheets (Mon GI)</div>
+              <div>📊 Google Sheets (Mon TRS)</div>
+              <div style="margin-top:6px;font-size:11px;color:var(--text-4)">Data diperbarui otomatis setiap 5 menit</div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-4);margin-bottom:8px">Fitur</div>
+            <div style="font-size:13px;color:var(--text-2);line-height:1.8">
+              <div>✅ Filter & pencarian realtime</div>
+              <div>✅ Export Excel & PDF</div>
+              <div>✅ Visualisasi grafik dinamis</div>
+              <div>✅ Dark mode</div>
+              <div>✅ Responsive mobile</div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <div style="font-size:12px;color:var(--text-4);line-height:1.8">
+          <div><strong style="color:var(--text-3)">Kategori Aset:</strong> Gardu Induk (GI) · Transmisi (TRS)</div>
+          <div><strong style="color:var(--text-3)">Status SLO:</strong> Selesai / Berlaku · Proses / Pengajuan · Belum · Expired</div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+            Dashboard ini dikembangkan untuk monitoring internal UPT Probolinggo PT PLN (Persero) UIT JBM.
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div><!-- /app-layout -->
+
+<!-- DETAIL MODAL -->
+<div class="modal-backdrop" id="modal" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">
+        <div class="modal-title-dot"></div>
+        Detail Aset SLO
+      </div>
+      <button class="modal-close" onclick="closeModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- SCROLL TO TOP -->
+<button id="go-top" onclick="document.getElementById('main-content').scrollTo({top:0,behavior:'smooth'})">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+</button>
+
+<!-- TOAST -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="script.js"></script>
+<script>
+/* ── ADDITIONAL PAGE LOGIC ── */
+
+// Render preview table on dashboard
+function renderPreviewTable() {
+  const all = [...state.giData, ...state.trsData].slice(0, 8);
+  const thead = document.getElementById('tbl-head-preview');
+  const tbody = document.getElementById('tbl-body-preview');
+  if (!thead || !tbody) return;
+
+  thead.innerHTML = `<tr>
+    <th style="width:50px">No</th>
+    <th>Kategori</th>
+    <th>ULTG</th>
+    <th>Nama Aset</th>
+    <th>No. SLO</th>
+    <th>Masa Berlaku</th>
+    <th>Status</th>
+  </tr>`;
+
+  tbody.innerHTML = all.map((r, i) => {
+    const catBadge = r.category === 'GI'
+      ? `<span class="badge" style="background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-bd)">GI</span>`
+      : `<span class="badge" style="background:var(--purple-bg);color:var(--purple);border:1px solid rgba(124,58,237,.15)">TRS</span>`;
+    return `<tr>
+      <td style="color:var(--text-4);font-size:11px">${i+1}</td>
+      <td>${catBadge}</td>
+      <td style="font-weight:600;font-size:12px">${r.ultg||'—'}</td>
+      <td style="font-size:12px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nama||'—'}</td>
+      <td style="font-family:monospace;font-size:11px;color:var(--accent)">${r.noSlo||'—'}</td>
+      <td style="font-size:11px">${r.masaBerlaku ? daysBadge(r.masaBerlaku) : '—'}</td>
+      <td>${statusBadge(r.statusRaw)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Category pages
+function renderCategoryPage(cat) {
+  const data = cat === 'gi' ? state.giData : state.trsData;
+  const prefix = cat;
+
+  const total   = data.length;
+  const selesai = data.filter(r => r.status === 'selesai').length;
+  const proses  = data.filter(r => r.status === 'proses').length;
+  const expired = data.filter(r => r.status === 'expired').length;
+
+  setText(`${prefix}-total`,   total);
+  setText(`${prefix}-selesai`, selesai);
+  setText(`${prefix}-proses`,  proses);
+  setText(`${prefix}-expired`, expired);
+
+  const thead = document.getElementById(`${prefix}-tbl-head`);
+  const tbody = document.getElementById(`${prefix}-tbl-body`);
+  if (!thead || !tbody) return;
+
+  thead.innerHTML = `<tr>
+    <th style="width:50px">No</th>
+    <th>ULTG</th>
+    <th>Nama</th>
+    <th>Jenis</th>
+    <th>No. SLO</th>
+    <th>Tgl Terbit</th>
+    <th>Masa Berlaku</th>
+    <th>Status</th>
+  </tr>`;
+
+  const page = data.slice(0, 20);
+  tbody.innerHTML = page.map((r, i) => `<tr>
+    <td style="color:var(--text-4);font-size:11px">${i+1}</td>
+    <td style="font-weight:600;font-size:12px">${r.ultg||'—'}</td>
+    <td style="font-size:12px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600">${r.nama||'—'}</td>
+    <td style="font-size:11px;color:var(--text-3)">${r.jenisAset||'—'}</td>
+    <td style="font-family:monospace;font-size:11px;color:var(--accent)">${r.noSlo||'—'}</td>
+    <td style="font-size:11px;color:var(--text-3)">${r.tglTerbit||'—'}</td>
+    <td>${r.masaBerlaku ? daysBadge(r.masaBerlaku) : '—'}</td>
+    <td>${statusBadge(r.statusRaw)}</td>
+  </tr>`).join('');
+
+  setText(`${prefix}-tbl-info`, `Menampilkan ${Math.min(20,total)} dari ${total} data`);
+}
+
+function exportCategoryExcel(cat) {
+  const data = cat === 'gi' ? state.giData : state.trsData;
+  if (!data.length) { showToast('Tidak ada data', 'error'); return; }
+  const header = ['No','ULTG','Nama Aset','Jenis Aset','No. SLO','Tgl Terbit','Masa Berlaku','Status','Keterangan'];
+  const rows = data.map((r,i) => [i+1, r.ultg, r.nama, r.jenisAset, r.noSlo, r.tglTerbit, r.masaBerlaku, statusLabel(r.status), r.keterangan]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, cat === 'gi' ? 'Gardu Induk' : 'Transmisi');
+  XLSX.writeFile(wb, `SLO_${cat === 'gi' ? 'GarduInduk' : 'Transmisi'}_${formatDate(new Date())}.xlsx`);
+  showToast('File Excel berhasil diunduh', 'success');
+}
+
+function onFilterChange() {
+  state.filters.status = document.getElementById('filter-status').value;
+  state.filters.lokasi = document.getElementById('filter-lokasi').value;
+  state.filters.tahun  = document.getElementById('filter-tahun').value;
+  applyFilters();
+}
+
+function resetFilters() {
+  state.filters = {search:'', status:'', lokasi:'', tahun:''};
+  document.getElementById('filter-search').value = '';
+  document.getElementById('filter-status').value = '';
+  document.getElementById('filter-lokasi').value = '';
+  document.getElementById('filter-tahun').value  = '';
+  applyFilters();
+}
+
+// Override navigate to also render category pages
+const _navigate = navigate;
+window.navigate = function(page) {
+  _navigate(page);
+  if (page === 'dashboard') renderPreviewTable();
+  if (page === 'gi')  renderCategoryPage('gi');
+  if (page === 'trs') renderCategoryPage('trs');
+};
+
+// Fix modal display
+const _openDetail = openDetail;
+window.openDetail = function(d) {
+  _openDetail(d);
+  document.getElementById('modal').style.display = 'flex';
+};
+const _closeModal = closeModal;
+window.closeModal = function() {
+  _closeModal();
+  document.getElementById('modal').style.display = 'none';
+};
+
+// After data loads, also render preview
+const _loadData = loadData;
+window.loadData = async function() {
+  await _loadData();
+  renderPreviewTable();
+  renderCategoryPage('gi');
+  renderCategoryPage('trs');
+  // Update badge
+  const badgeWarn = document.getElementById('badge-warn');
+  const expiredCount = [...state.giData, ...state.trsData].filter(r => r.status === 'expired').length;
+  const nearExp = [...state.giData, ...state.trsData].filter(r => {
+    const d = daysUntil(r.masaBerlaku);
+    return d !== null && d >= 0 && d <= 90;
+  }).length;
+  const totalWarn = expiredCount + nearExp;
+  if (badgeWarn) {
+    badgeWarn.textContent = totalWarn;
+    badgeWarn.style.display = totalWarn > 0 ? '' : 'none';
+  }
+};
+</script>
+</body>
+</html>
