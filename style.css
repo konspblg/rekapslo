@@ -816,3 +816,13 @@ tbody tr:hover{background:var(--accent-bg);}
 .days-badge.warn{background:var(--yellow-bg);color:var(--yellow);}
 .days-badge.crit{background:var(--red-bg);color:var(--red);}
 .days-badge.exp{background:var(--surface3);color:var(--text-4);}
+
+/* ─── BTN DETAIL ─────────────────────────────── */
+.btn-detail{
+  display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--r3);color:var(--text-4);
+  cursor:pointer;transition:all .15s;
+}
+.btn-detail:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-bg);}
