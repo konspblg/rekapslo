@@ -1,49 +1,20 @@
 /* ═══════════════════════════════════════════════
    Dashboard Rekap SLO — UPT Probolinggo PLN
-   script.js v2 — kolom sesuai struktur aktual sheet
+   script.js v3
    ═══════════════════════════════════════════════
+   MON GI  (header row0, blank row1, data row2+)
+   [0]NO [1]JENIS [2]LOKASI [3]NAMA BAY [4]BAY
+   [5]KAPASITAS [6]STATUS [7]SISA MASA BERLAKU
+   [8]NIDI [13]NO.REG [14]NO.SLO [15]DATE
+   [16]EXP.DATE [17]RENC.RE-SLO
 
-   MON GI (header row1, blank row2, data dari row3)
-   idx  Kolom  Header
-    0    A     NO
-    1    B     JENIS (GI/GITET)
-    2    C     LOKASI             ← dipakai
-    3    D     NAMA BAY           ← dipakai
-    4    E     BAY                ← dipakai
-    5    F     KAPASITAS PMT/TRF
-    6    G     STATUS             ← dipakai (SLO/BELUM/PROSES)
-    7    H     SISA MASA BERLAKU  ← dipakai
-    8    I     NIDI SIUJANG GATRIK← dipakai
-   13    N     NO. REG            ← dipakai
-   14    O     NO. SLO            ← dipakai
-   15    P     DATE               ← dipakai
-   16    Q     EXP. DATE          ← dipakai
-   17    R     RENCANA RE-SLO     ← dipakai
-
-   MON TRS (header row1, blank row2, data dari row3)
-   Ada kolom KOSONG di index 5 antara E dan F:
-    0    A     No
-    1    B     JENIS              ← dipakai
-    2    C     GI ASAL            ← dipakai
-    3    D     GI TUJUAN          ← dipakai
-    4    E     SIRKUIT            ← dipakai
-    5    [blank col]
-    6    F     KMS                ← dipakai
-    7    G     JML TOWER          ← dipakai
-    8    H     ULTG PBL
-    9    I     ULTG JBR
-   10    J     ULTG BGL
-   11    K     KONDISI
-   12    L     STATUS             ← dipakai (SLO/SLO PART/BELUM)
-   13    M     SISA MASA BERLAKU  ← dipakai
-   14    N     NIDI SIUJANG GATRIK← dipakai
-   19    S     NO. REG            ← dipakai
-   20    T     NO. SLO            ← dipakai
-   21    U     DATE               ← dipakai
-   22    V     EXP. DATE          ← dipakai
-   23    W     TAHUN EXP          ← dipakai
-   24    X     RENC. RE-SLO       ← dipakai
-   25    Y     LINGKUP            ← dipakai
+   MON TRS (header row0, blank row1, data row2+)
+   Ada blank col di index [5]:
+   [0]No [1]JENIS [2]GI ASAL [3]GI TUJUAN [4]SIRKUIT
+   [5]blank [6]KMS [7]JML TOWER [8]ULTG PBL [9]ULTG JBR
+   [10]ULTG BGL [11]KONDISI [12]STATUS [13]SISA MASA BERLAKU
+   [14]NIDI [19]NO.REG [20]NO.SLO [21]DATE [22]EXP.DATE
+   [23]TAHUN EXP [24]RENC.RE-SLO [25]LINGKUP
    ═══════════════════════════════════════════════ */
 
 const SHEET_ID = '1fSqtiexbkkH8Fmyr5M-TEHXmclfWIlVbbSv2e-nSEs8';
@@ -51,12 +22,15 @@ const GID_GI   = '957972427';
 const GID_TRS  = '233827604';
 const CSV_GI   = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID_GI}`;
 const CSV_TRS  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID_TRS}`;
-const ROWS_PER_PAGE = 15;
+const ROWS_PER_PAGE = 20;
 
 const state = {
   giData:[], trsData:[], filtered:[],
   page:1, sortCol:-1, sortAsc:true,
   activeCategory:'all',
+  // Category page state (terpisah dari tabel utama)
+  giPage:1, giSortCol:-1, giSortAsc:true,
+  trsPage:1, trsSortCol:-1, trsSortAsc:true,
   filters:{search:'',status:'',lokasi:'',tahun:''},
   chartStatus:null, chartProgress:null, lastUpdate:null,
 };
@@ -66,17 +40,16 @@ const GI_COL = {
   statusRaw:6, sisaBerlaku:7, nidi:8,
   noReg:13, noSlo:14, tglTerbit:15, expDate:16, rencReSlo:17,
 };
-
 const TRS_COL = {
   jenis:1, giAsal:2, giTujuan:3, sirkuit:4,
-  kms:6, jmlTower:7,
-  ultgPbl:8, ultgJbr:9, ultgBgl:10, kondisi:11,
-  statusRaw:12, sisaBerlaku:13, nidi:14,
+  // index 5 = blank col
+  kms:6, jmlTower:7, ultgPbl:8, ultgJbr:9, ultgBgl:10,
+  kondisi:11, statusRaw:12, sisaBerlaku:13, nidi:14,
   noReg:19, noSlo:20, tglTerbit:21, expDate:22,
   tahunExp:23, rencReSlo:24, lingkup:25,
 };
 
-/* ── CSV Parser ────────────────────────────────── */
+/* ── CSV Parser ─────────────────────────────────── */
 function parseCSV(text){return text.split('\n').map(parseCSVLine);}
 function parseCSVLine(line){
   const res=[];let cur='',inQ=false;
@@ -86,12 +59,11 @@ function parseCSVLine(line){
     else if(c===','&&!inQ){res.push(cur.trim());cur='';}
     else cur+=c;
   }
-  res.push(cur.trim());
-  return res;
+  res.push(cur.trim());return res;
 }
 const g=(r,i)=>(r[i]||'').trim();
 
-/* ── Status ────────────────────────────────────── */
+/* ── Status ─────────────────────────────────────── */
 function normalizeStatus(raw){
   if(!raw)return'pending';
   const r=raw.toLowerCase().trim();
@@ -101,7 +73,9 @@ function normalizeStatus(raw){
   if(r.includes('belum'))return'pending';
   return'pending';
 }
-function statusLabel(s){return{selesai:'SLO Terbit',proses:'Proses',expired:'Expired',pending:'Belum'}[s]||'Belum';}
+function statusLabel(s){
+  return{selesai:'SLO Terbit',proses:'Proses',expired:'Expired',pending:'Belum'}[s]||'Belum';
+}
 function statusBadge(raw){
   const s=normalizeStatus(raw);
   const lbl={selesai:'SLO Terbit',proses:'Proses',expired:'Expired',pending:'Belum'}[s]||'Belum';
@@ -110,12 +84,13 @@ function statusBadge(raw){
 
 /* ── Date Utils ─────────────────────────────────── */
 function parseDateID(str){
-  if(!str||str==='N/A'||str==='-')return null;
+  if(!str||str==='N/A'||str==='-'||str==='')return null;
   let m=str.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if(m)return new Date(+m[1],+m[2]-1,+m[3]);
   m=str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
   if(m)return new Date(+m[3],+m[2]-1,+m[1]);
-  const MON={jan:0,feb:1,mar:2,apr:3,mei:4,jun:5,jul:6,agu:7,sep:8,okt:9,nov:10,des:11,may:4,aug:7,oct:9,dec:11};
+  const MON={jan:0,feb:1,mar:2,apr:3,mei:4,jun:5,jul:6,agu:7,sep:8,okt:9,nov:10,des:11,
+             may:4,aug:7,oct:9,dec:11};
   m=str.toLowerCase().match(/^(\d{1,2})\s+([a-z]+)\s+(\d{4})/);
   if(m){const mi=MON[m[2].substring(0,3)];if(mi!==undefined)return new Date(+m[3],mi,+m[1]);}
   return null;
@@ -128,44 +103,47 @@ function daysUntil(str){
 function daysBadge(str){
   const d=daysUntil(str);
   if(d===null)return'';
-  if(d<0)return`<span class="days-badge exp">Exp ${Math.abs(d)}h lalu</span>`;
-  if(d<=30)return`<span class="days-badge crit">${d}h lagi</span>`;
-  if(d<=90)return`<span class="days-badge warn">${d}h lagi</span>`;
+  if(d<0) return`<span class="days-badge exp">Exp ${Math.abs(d)}h lalu</span>`;
+  if(d<=30) return`<span class="days-badge crit">${d}h lagi</span>`;
+  if(d<=90) return`<span class="days-badge warn">${d}h lagi</span>`;
   return`<span class="days-badge ok">${d}h lagi</span>`;
 }
 function getYear(str){const d=parseDateID(str);return d?d.getFullYear():null;}
+function dateTs(str){const d=parseDateID(str);return d?d.getTime():Infinity;}
 
 /* ── Process Rows ───────────────────────────────── */
 function processGIRow(r){
-  const statusRaw=g(r,GI_COL.statusRaw),expDate=g(r,GI_COL.expDate);
+  const statusRaw=g(r,GI_COL.statusRaw), expDate=g(r,GI_COL.expDate);
   let status=normalizeStatus(statusRaw);
   if(status==='selesai'&&expDate){const d=daysUntil(expDate);if(d!==null&&d<0)status='expired';}
-  const lokasi=g(r,GI_COL.lokasi),namaBay=g(r,GI_COL.namaBay);
+  const lokasi=g(r,GI_COL.lokasi), namaBay=g(r,GI_COL.namaBay);
   return{
-    category:'GI',no:g(r,0),jenis:g(r,GI_COL.jenis),
-    lokasi,namaBay,bay:g(r,GI_COL.bay),kapasitas:g(r,GI_COL.kapasitas),
-    sisaBerlaku:g(r,GI_COL.sisaBerlaku),nidi:g(r,GI_COL.nidi),
-    noReg:g(r,GI_COL.noReg),noSlo:g(r,GI_COL.noSlo),
-    tglTerbit:g(r,GI_COL.tglTerbit),expDate,rencReSlo:g(r,GI_COL.rencReSlo),
-    statusRaw,status,nama:`${lokasi} — ${namaBay}`,ultg:lokasi,masaBerlaku:expDate,
+    category:'GI', no:g(r,0), jenis:g(r,GI_COL.jenis),
+    lokasi, namaBay, bay:g(r,GI_COL.bay), kapasitas:g(r,GI_COL.kapasitas),
+    sisaBerlaku:g(r,GI_COL.sisaBerlaku), nidi:g(r,GI_COL.nidi),
+    noReg:g(r,GI_COL.noReg), noSlo:g(r,GI_COL.noSlo),
+    tglTerbit:g(r,GI_COL.tglTerbit), expDate, rencReSlo:g(r,GI_COL.rencReSlo),
+    statusRaw, status,
+    nama:`${lokasi} — ${namaBay}`, ultg:lokasi, masaBerlaku:expDate,
   };
 }
 function processTRSRow(r){
-  const statusRaw=g(r,TRS_COL.statusRaw),expDate=g(r,TRS_COL.expDate);
+  const statusRaw=g(r,TRS_COL.statusRaw), expDate=g(r,TRS_COL.expDate);
   let status=normalizeStatus(statusRaw);
   if(status==='selesai'&&expDate){const d=daysUntil(expDate);if(d!==null&&d<0)status='expired';}
-  const jenis=g(r,TRS_COL.jenis),giAsal=g(r,TRS_COL.giAsal),
-        giTujuan=g(r,TRS_COL.giTujuan),sirkuit=g(r,TRS_COL.sirkuit);
+  const jenis=g(r,TRS_COL.jenis), giAsal=g(r,TRS_COL.giAsal),
+        giTujuan=g(r,TRS_COL.giTujuan), sirkuit=g(r,TRS_COL.sirkuit);
   const nama=`${jenis} ${giAsal}–${giTujuan}${sirkuit?' S'+sirkuit:''}`;
   const ultgParts=[g(r,TRS_COL.ultgPbl),g(r,TRS_COL.ultgJbr),g(r,TRS_COL.ultgBgl)].filter(u=>u&&u!=='-');
   return{
-    category:'Transmisi',no:g(r,0),jenis,giAsal,giTujuan,sirkuit,
-    kms:g(r,TRS_COL.kms),jmlTower:g(r,TRS_COL.jmlTower),kondisi:g(r,TRS_COL.kondisi),
-    sisaBerlaku:g(r,TRS_COL.sisaBerlaku),nidi:g(r,TRS_COL.nidi),
-    noReg:g(r,TRS_COL.noReg),noSlo:g(r,TRS_COL.noSlo),
-    tglTerbit:g(r,TRS_COL.tglTerbit),expDate,tahunExp:g(r,TRS_COL.tahunExp),
-    rencReSlo:g(r,TRS_COL.rencReSlo),lingkup:g(r,TRS_COL.lingkup),
-    statusRaw,status,nama,ultg:ultgParts.length?ultgParts.join('/'):'—',masaBerlaku:expDate,
+    category:'Transmisi', no:g(r,0), jenis, giAsal, giTujuan, sirkuit,
+    kms:g(r,TRS_COL.kms), jmlTower:g(r,TRS_COL.jmlTower), kondisi:g(r,TRS_COL.kondisi),
+    sisaBerlaku:g(r,TRS_COL.sisaBerlaku), nidi:g(r,TRS_COL.nidi),
+    noReg:g(r,TRS_COL.noReg), noSlo:g(r,TRS_COL.noSlo),
+    tglTerbit:g(r,TRS_COL.tglTerbit), expDate, tahunExp:g(r,TRS_COL.tahunExp),
+    rencReSlo:g(r,TRS_COL.rencReSlo), lingkup:g(r,TRS_COL.lingkup),
+    statusRaw, status,
+    nama, ultg:ultgParts.length?ultgParts.join('/'):'—', masaBerlaku:expDate,
   };
 }
 
@@ -178,15 +156,15 @@ async function loadData(){
       fetch(CSV_GI).then(r=>{if(!r.ok)throw new Error('GI: HTTP '+r.status);return r.text();}),
       fetch(CSV_TRS).then(r=>{if(!r.ok)throw new Error('TRS: HTTP '+r.status);return r.text();}),
     ]);
-    // Slice 2 baris awal (header + baris kosong), lalu filter baris data valid
+    // Slice 2 baris awal (header row0 + blank row1), data mulai row2
     const giRows=parseCSV(giText).slice(2).filter(r=>
-      r.length>14&&g(r,GI_COL.noSlo)&&g(r,GI_COL.lokasi)
+      r.length>14 && g(r,GI_COL.noSlo) && g(r,GI_COL.lokasi)
     );
     const trsRows=parseCSV(trsText).slice(2).filter(r=>
-      r.length>20&&g(r,TRS_COL.jenis)&&g(r,TRS_COL.noSlo)
+      r.length>20 && g(r,TRS_COL.jenis) && g(r,TRS_COL.noSlo)
     );
-    state.giData=giRows.map(processGIRow);
-    state.trsData=trsRows.map(processTRSRow);
+    state.giData  = giRows.map(processGIRow);
+    state.trsData = trsRows.map(processTRSRow);
     state.lastUpdate=new Date();
     setText('last-update','Diperbarui: '+formatTime(state.lastUpdate));
     populateFilters();
@@ -199,7 +177,7 @@ async function loadData(){
     const warn=countWarnings();
     const bw=document.getElementById('badge-warn');
     if(bw){bw.textContent=warn;bw.style.display=warn>0?'':'none';}
-    showToast(`Berhasil dimuat — ${state.giData.length} GI, ${state.trsData.length} Transmisi`,'success');
+    showToast(`Berhasil — ${state.giData.length} GI, ${state.trsData.length} Transmisi`,'success');
   }catch(e){
     console.error(e);
     showToast('Gagal memuat: '+e.message,'error');
@@ -219,7 +197,7 @@ function countWarnings(){
 
 /* ── Filters ────────────────────────────────────── */
 function getSourceData(){
-  if(state.activeCategory==='gi')return state.giData;
+  if(state.activeCategory==='gi') return state.giData;
   if(state.activeCategory==='trs')return state.trsData;
   return[...state.giData,...state.trsData];
 }
@@ -239,7 +217,7 @@ function applyFilters(){
       (r.namaBay||'').toLowerCase().includes(s)
     );
   }
-  if(status)data=data.filter(r=>r.status===status);
+  if(status) data=data.filter(r=>r.status===status);
   if(lokasi){
     const lc=lokasi.toLowerCase();
     data=data.filter(r=>
@@ -248,12 +226,12 @@ function applyFilters(){
       (r.giTujuan||'').toLowerCase().includes(lc)
     );
   }
-  if(tahun)data=data.filter(r=>{
+  if(tahun) data=data.filter(r=>{
     const y=getYear(r.tglTerbit)||getYear(r.expDate);
     return y&&y.toString()===tahun;
   });
-  state.filtered=data;state.page=1;
-  renderTable();updateTableInfo();
+  state.filtered=data; state.page=1;
+  renderTable(); updateTableInfo();
 }
 function populateFilters(){
   const lokasiSet=new Set();
@@ -277,10 +255,11 @@ function renderStats(){
   const expired=all.filter(r=>r.status==='expired').length;
   const nearExp=all.filter(r=>{const d=daysUntil(r.masaBerlaku);return d!==null&&d>=0&&d<=90&&r.status==='selesai';}).length;
   const pct=total?Math.round(selesai/total*100):0;
-  setText('stat-total',total);setText('stat-selesai',selesai);
-  setText('stat-proses',proses);setText('stat-expired',expired+nearExp);
-  setText('stat-gi',state.giData.length);setText('stat-trs',state.trsData.length);
-  setText('progress-pct',pct+'%');setText('sb-gi-count',state.giData.length);setText('sb-trs-count',state.trsData.length);
+  setText('stat-total',total); setText('stat-selesai',selesai);
+  setText('stat-proses',proses); setText('stat-expired',expired+nearExp);
+  setText('stat-gi',state.giData.length); setText('stat-trs',state.trsData.length);
+  setText('progress-pct',pct+'%');
+  setText('sb-gi-count',state.giData.length); setText('sb-trs-count',state.trsData.length);
   const fill=document.getElementById('progress-fill');
   if(fill)setTimeout(()=>fill.style.width=pct+'%',100);
 }
@@ -290,15 +269,12 @@ function setText(id,val){const el=document.getElementById(id);if(el)el.textConte
 function renderCharts(){renderStatusChart();renderProgressChart();}
 function renderStatusChart(){
   const all=[...state.giData,...state.trsData];
-  const c={selesai:all.filter(r=>r.status==='selesai').length,
-           proses:all.filter(r=>r.status==='proses').length,
-           pending:all.filter(r=>r.status==='pending').length,
-           expired:all.filter(r=>r.status==='expired').length};
+  const c={selesai:all.filter(r=>r.status==='selesai').length,proses:all.filter(r=>r.status==='proses').length,
+           pending:all.filter(r=>r.status==='pending').length,expired:all.filter(r=>r.status==='expired').length};
   const ctx=document.getElementById('chart-status');if(!ctx)return;
   if(state.chartStatus)state.chartStatus.destroy();
   const dark=document.documentElement.getAttribute('data-theme')==='dark';
-  const tc=dark?'#8b949e':'#64748b';
-  const total=Object.values(c).reduce((a,b)=>a+b,0);
+  const tc=dark?'#8b949e':'#64748b',total=Object.values(c).reduce((a,b)=>a+b,0);
   state.chartStatus=new Chart(ctx,{type:'doughnut',
     data:{labels:['SLO Terbit','Proses','Belum','Expired'],
       datasets:[{data:[c.selesai,c.proses,c.pending,c.expired],
@@ -329,16 +305,18 @@ function renderProgressChart(){
   });
 }
 
-/* ── Table ──────────────────────────────────────── */
+/* ══════════════════════════════════════════════════
+   TABLE UTAMA (halaman Data SLO)
+   ═══════════════════════════════════════════════ */
 const TABLE_COLS=[
   {key:'no',w:'44px',label:'No'},
   {key:'category',w:'65px',label:'Tipe'},
   {key:'jenis',w:'105px',label:'Jenis'},
-  {key:'nama',w:'195px',label:'Nama / Ruas'},
+  {key:'nama',w:'185px',label:'Nama / Ruas'},
   {key:'noSlo',w:'145px',label:'No. SLO'},
   {key:'tglTerbit',w:'100px',label:'Tgl Terbit'},
   {key:'expDate',w:'100px',label:'Exp. Date'},
-  {key:'sisaBerlaku',w:'120px',label:'Sisa Masa'},
+  {key:'_expTs',w:'120px',label:'Masa Berlaku ↑'},  // sort by timestamp
   {key:'status',w:'95px',label:'Status'},
   {key:'detail',w:'46px',label:''},
 ];
@@ -355,10 +333,17 @@ function renderTable(){
   if(state.sortCol>=0){
     const key=TABLE_COLS[state.sortCol].key;
     data.sort((a,b)=>{
-      let va=a[key]||'',vb=b[key]||'';
-      if(!isNaN(+va)&&!isNaN(+vb)){va=+va;vb=+vb;}else{va=va.toString().toLowerCase();vb=vb.toString().toLowerCase();}
+      let va,vb;
+      if(key==='_expTs'){va=dateTs(a.expDate);vb=dateTs(b.expDate);}
+      else{va=a[key]||'';vb=b[key]||'';
+        if(!isNaN(+va)&&!isNaN(+vb)){va=+va;vb=+vb;}
+        else{va=va.toString().toLowerCase();vb=vb.toString().toLowerCase();}
+      }
       return state.sortAsc?(va>vb?1:-1):(va<vb?1:-1);
     });
+  } else {
+    // Default sort: masa berlaku paling dekat dulu
+    data.sort((a,b)=>dateTs(a.expDate)-dateTs(b.expDate));
   }
   const start=(state.page-1)*ROWS_PER_PAGE;
   const page=data.slice(start,start+ROWS_PER_PAGE);
@@ -386,7 +371,7 @@ function renderTable(){
         <td style="color:var(--text-4);font-size:11px">${gi}</td>
         <td>${catBadge}</td>
         <td style="font-size:11px;color:var(--text-3)">${r.jenis||'—'}</td>
-        <td style="font-weight:600;font-size:12px;max-width:195px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(r.nama||'').replace(/"/g,'&quot;')}">${r.nama||'—'}</td>
+        <td style="font-weight:600;font-size:12px;max-width:185px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(r.nama||'').replace(/"/g,'&quot;')}">${r.nama||'—'}</td>
         <td style="font-family:monospace;font-size:11px;color:var(--accent)">${r.noSlo||'—'}</td>
         <td style="font-size:11px;color:var(--text-3)">${r.tglTerbit||'—'}</td>
         <td style="font-size:11px">${r.expDate||'—'}</td>
@@ -398,17 +383,32 @@ function renderTable(){
       </tr>`;
     }).join('');
   }
-  renderPagination(data.length);
+  renderPagination(data.length,'pagination',state.page,(p)=>{state.page=p;renderTable();});
 }
-function sortTable(i){if(state.sortCol===i)state.sortAsc=!state.sortAsc;else{state.sortCol=i;state.sortAsc=true;}renderTable();}
-function updateTableInfo(){const el=document.getElementById('tbl-info');if(el)el.innerHTML=`Menampilkan <strong>${state.filtered.length}</strong> dari <strong>${getSourceData().length}</strong> data`;}
-function renderPagination(total){
+function sortTable(i){
+  if(state.sortCol===i)state.sortAsc=!state.sortAsc;
+  else{state.sortCol=i;state.sortAsc=true;}
+  renderTable();
+}
+function updateTableInfo(){
+  const el=document.getElementById('tbl-info');
+  if(el)el.innerHTML=`Menampilkan <strong>${state.filtered.length}</strong> dari <strong>${getSourceData().length}</strong> data`;
+}
+
+/* ══════════════════════════════════════════════════
+   GENERIC PAGINATION RENDERER
+   ═══════════════════════════════════════════════ */
+function renderPagination(total, containerId, curPage, onGoto){
   const tp=Math.ceil(total/ROWS_PER_PAGE);
-  const c=document.getElementById('pagination');if(!c)return;
-  const s=(state.page-1)*ROWS_PER_PAGE+1,e=Math.min(state.page*ROWS_PER_PAGE,total);
-  let btns=`<button class="page-btn" onclick="gotoPage(${state.page-1})" ${state.page<=1?'disabled':''}>&#8249;</button>`;
-  pageRange(state.page,tp).forEach(p=>{btns+=p==='...'?`<button class="page-btn" disabled>…</button>`:`<button class="page-btn ${p===state.page?'active':''}" onclick="gotoPage(${p})">${p}</button>`;});
-  btns+=`<button class="page-btn" onclick="gotoPage(${state.page+1})" ${state.page>=tp?'disabled':''}>&#8250;</button>`;
+  const c=document.getElementById(containerId);if(!c)return;
+  const s=(curPage-1)*ROWS_PER_PAGE+1, e=Math.min(curPage*ROWS_PER_PAGE,total);
+  let btns=`<button class="page-btn" onclick="(${onGoto.toString()})(${curPage-1})" ${curPage<=1?'disabled':''}>&#8249;</button>`;
+  pageRange(curPage,tp).forEach(p=>{
+    btns+=p==='...'
+      ?`<button class="page-btn" disabled>…</button>`
+      :`<button class="page-btn ${p===curPage?'active':''}" onclick="(${onGoto.toString()})(${p})">${p}</button>`;
+  });
+  btns+=`<button class="page-btn" onclick="(${onGoto.toString()})(${curPage+1})" ${curPage>=tp?'disabled':''}>&#8250;</button>`;
   c.innerHTML=`<div class="page-info">Baris ${total?s:0}–${e} dari ${total}</div><div class="page-btns">${btns}</div>`;
 }
 function pageRange(cur,total){
@@ -417,14 +417,19 @@ function pageRange(cur,total){
   if(cur>=total-3)return[1,'...',total-4,total-3,total-2,total-1,total];
   return[1,'...',cur-1,cur,cur+1,'...',total];
 }
-function gotoPage(p){const tp=Math.ceil(state.filtered.length/ROWS_PER_PAGE);if(p<1||p>tp)return;state.page=p;renderTable();}
+function gotoPage(p){
+  const tp=Math.ceil(state.filtered.length/ROWS_PER_PAGE);
+  if(p<1||p>tp)return; state.page=p; renderTable();
+}
 
 /* ── Preview Table (Dashboard) ──────────────────── */
 function renderPreviewTable(){
-  const all=[...state.giData,...state.trsData].slice(0,8);
+  const all=[...state.giData,...state.trsData]
+    .sort((a,b)=>dateTs(a.expDate)-dateTs(b.expDate))
+    .slice(0,8);
   const thead=document.getElementById('tbl-head-preview'),tbody=document.getElementById('tbl-body-preview');
   if(!thead||!tbody)return;
-  thead.innerHTML=`<tr><th>No</th><th>Tipe</th><th>Jenis</th><th>Nama / Ruas</th><th>No. SLO</th><th>Sisa Masa</th><th>Status</th></tr>`;
+  thead.innerHTML=`<tr><th>No</th><th>Tipe</th><th>Jenis</th><th>Nama / Ruas</th><th>No. SLO</th><th>Masa Berlaku ↑</th><th>Status</th></tr>`;
   tbody.innerHTML=all.map((r,i)=>{
     const cb=r.category==='GI'
       ?`<span class="badge" style="background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-bd)">GI</span>`
@@ -440,34 +445,135 @@ function renderPreviewTable(){
   }).join('');
 }
 
-/* ── Category Pages ─────────────────────────────── */
-function renderCategoryPage(cat){
-  const data=cat==='gi'?state.giData:state.trsData,p=cat,total=data.length;
-  setText(`${p}-total`,total);
-  setText(`${p}-selesai`,data.filter(r=>r.status==='selesai').length);
-  setText(`${p}-proses`,data.filter(r=>r.status==='proses').length);
-  setText(`${p}-expired`,data.filter(r=>r.status==='expired').length);
-  const thead=document.getElementById(`${p}-tbl-head`),tbody=document.getElementById(`${p}-tbl-body`);
-  if(!thead||!tbody)return;
+/* ══════════════════════════════════════════════════
+   CATEGORY PAGES — GI & TRS dengan pagination penuh
+   ═══════════════════════════════════════════════ */
+
+/* --- Kolom tabel GI --- */
+const GI_TABLE_COLS=[
+  {key:'no',w:'40px',label:'No',sortKey:'no'},
+  {key:'jenis',w:'60px',label:'Jenis',sortKey:'jenis'},
+  {key:'lokasi',w:'130px',label:'Lokasi (GI)',sortKey:'lokasi'},
+  {key:'namaBay',w:'160px',label:'Nama Bay',sortKey:'namaBay'},
+  {key:'bay',w:'70px',label:'Bay',sortKey:'bay'},
+  {key:'noSlo',w:'150px',label:'No. SLO',sortKey:'noSlo'},
+  {key:'tglTerbit',w:'100px',label:'Tgl Terbit',sortKey:'tglTerbit'},
+  {key:'expDate',w:'100px',label:'Exp. Date',sortKey:'_expTs'},
+  {key:'_expTs',w:'110px',label:'Masa Berlaku ↑',sortKey:'_expTs'},
+  {key:'status',w:'95px',label:'Status',sortKey:'status'},
+];
+
+/* --- Kolom tabel TRS --- */
+const TRS_TABLE_COLS=[
+  {key:'no',w:'38px',label:'No',sortKey:'no'},
+  {key:'jenis',w:'90px',label:'Jenis',sortKey:'jenis'},
+  {key:'giAsal',w:'110px',label:'GI Asal',sortKey:'giAsal'},
+  {key:'giTujuan',w:'110px',label:'GI Tujuan',sortKey:'giTujuan'},
+  {key:'sirkuit',w:'36px',label:'S',sortKey:'sirkuit'},
+  {key:'kms',w:'60px',label:'KMS',sortKey:'kms'},
+  {key:'jmlTower',w:'60px',label:'Tower',sortKey:'jmlTower'},
+  {key:'noSlo',w:'145px',label:'No. SLO',sortKey:'noSlo'},
+  {key:'tglTerbit',w:'90px',label:'Tgl Terbit',sortKey:'tglTerbit'},
+  {key:'expDate',w:'90px',label:'Exp. Date',sortKey:'_expTs'},
+  {key:'_expTs',w:'110px',label:'Masa Berlaku ↑',sortKey:'_expTs'},
+  {key:'status',w:'95px',label:'Status',sortKey:'status'},
+];
+
+function getSortedCatData(cat){
+  const data=[...(cat==='gi'?state.giData:state.trsData)];
+  const cols=cat==='gi'?GI_TABLE_COLS:TRS_TABLE_COLS;
+  const sCol=cat==='gi'?state.giSortCol:state.trsSortCol;
+  const sAsc=cat==='gi'?state.giSortAsc:state.trsSortAsc;
+
+  if(sCol>=0 && sCol<cols.length){
+    const sk=cols[sCol].sortKey;
+    data.sort((a,b)=>{
+      let va,vb;
+      if(sk==='_expTs'){va=dateTs(a.expDate);vb=dateTs(b.expDate);}
+      else{va=a[sk]||'';vb=b[sk]||'';
+        if(!isNaN(+va)&&!isNaN(+vb)){va=+va;vb=+vb;}
+        else{va=va.toString().toLowerCase();vb=vb.toString().toLowerCase();}
+      }
+      return sAsc?(va>vb?1:-1):(va<vb?1:-1);
+    });
+  } else {
+    // Default: sort masa berlaku paling dekat dulu
+    data.sort((a,b)=>dateTs(a.expDate)-dateTs(b.expDate));
+  }
+  return data;
+}
+
+function sortCatTable(cat,colIdx){
   if(cat==='gi'){
-    thead.innerHTML=`<tr><th>No</th><th>Jenis</th><th>Lokasi (GI)</th><th>Nama Bay</th><th>Bay</th><th>No. REG</th><th>No. SLO</th><th>Tgl Terbit</th><th>Exp. Date</th><th>Sisa</th><th>Status</th></tr>`;
-    tbody.innerHTML=data.slice(0,30).map((r,i)=>`<tr>
-      <td style="color:var(--text-4);font-size:11px">${i+1}</td>
+    if(state.giSortCol===colIdx)state.giSortAsc=!state.giSortAsc;
+    else{state.giSortCol=colIdx;state.giSortAsc=true;}
+    state.giPage=1;
+  } else {
+    if(state.trsSortCol===colIdx)state.trsSortAsc=!state.trsSortAsc;
+    else{state.trsSortCol=colIdx;state.trsSortAsc=true;}
+    state.trsPage=1;
+  }
+  renderCategoryPage(cat);
+}
+
+function gotoCatPage(cat,p){
+  const data=getSortedCatData(cat);
+  const tp=Math.ceil(data.length/ROWS_PER_PAGE);
+  if(p<1||p>tp)return;
+  if(cat==='gi')state.giPage=p; else state.trsPage=p;
+  renderCategoryPage(cat);
+}
+
+function renderCategoryPage(cat){
+  const prefix=cat;
+  const data=getSortedCatData(cat);
+  const curPage=cat==='gi'?state.giPage:state.trsPage;
+  const total=data.length;
+  const sCol=cat==='gi'?state.giSortCol:state.trsSortCol;
+  const sAsc=cat==='gi'?state.giSortAsc:state.trsSortAsc;
+  const cols=cat==='gi'?GI_TABLE_COLS:TRS_TABLE_COLS;
+
+  // Stat cards
+  const src=cat==='gi'?state.giData:state.trsData;
+  setText(`${prefix}-total`,total);
+  setText(`${prefix}-selesai`,src.filter(r=>r.status==='selesai').length);
+  setText(`${prefix}-proses`,src.filter(r=>r.status==='proses').length);
+  setText(`${prefix}-expired`,src.filter(r=>r.status==='expired').length);
+
+  const thead=document.getElementById(`${prefix}-tbl-head`);
+  const tbody=document.getElementById(`${prefix}-tbl-body`);
+  if(!thead||!tbody)return;
+
+  // Render header dengan sort
+  thead.innerHTML=`<tr>${cols.map((c,i)=>{
+    const cls=sCol===i?(sAsc?'sort-asc':'sort-desc'):'';
+    const icon=`<span class="sort-icon">${sCol===i?(sAsc?'↑':'↓'):'↕'}</span>`;
+    return`<th style="width:${c.w}" class="${cls}" onclick="sortCatTable('${cat}',${i})">${c.label}${icon}</th>`;
+  }).join('')}</tr>`;
+
+  // Slice halaman
+  const start=(curPage-1)*ROWS_PER_PAGE;
+  const pageData=data.slice(start,start+ROWS_PER_PAGE);
+
+  if(!pageData.length){
+    tbody.innerHTML=`<tr><td colspan="${cols.length}"><div class="empty-state">
+      <div class="empty-title">Tidak ada data</div></div></td></tr>`;
+  } else if(cat==='gi'){
+    tbody.innerHTML=pageData.map((r,i)=>`<tr>
+      <td style="color:var(--text-4);font-size:11px">${start+i+1}</td>
       <td style="font-size:11px;color:var(--text-3)">${r.jenis||'—'}</td>
       <td style="font-weight:600;font-size:12px">${r.lokasi||'—'}</td>
-      <td style="font-size:12px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(r.namaBay||'').replace(/"/g,'')}">${r.namaBay||'—'}</td>
+      <td style="font-size:12px;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(r.namaBay||'').replace(/"/g,'')}">${r.namaBay||'—'}</td>
       <td style="font-size:11px;color:var(--text-3)">${r.bay||'—'}</td>
-      <td style="font-family:monospace;font-size:10px;color:var(--text-3)">${r.noReg||'—'}</td>
       <td style="font-family:monospace;font-size:11px;color:var(--accent)">${r.noSlo||'—'}</td>
       <td style="font-size:11px;color:var(--text-3)">${r.tglTerbit||'—'}</td>
       <td style="font-size:11px">${r.expDate||'—'}</td>
       <td>${r.masaBerlaku?daysBadge(r.masaBerlaku):'—'}</td>
       <td>${statusBadge(r.statusRaw)}</td>
     </tr>`).join('');
-  }else{
-    thead.innerHTML=`<tr><th>No</th><th>Jenis</th><th>GI Asal</th><th>GI Tujuan</th><th>S</th><th>KMS</th><th>Tower</th><th>No. SLO</th><th>Tgl Terbit</th><th>Exp. Date</th><th>Sisa</th><th>Status</th></tr>`;
-    tbody.innerHTML=data.slice(0,30).map((r,i)=>`<tr>
-      <td style="color:var(--text-4);font-size:11px">${i+1}</td>
+  } else {
+    tbody.innerHTML=pageData.map((r,i)=>`<tr>
+      <td style="color:var(--text-4);font-size:11px">${start+i+1}</td>
       <td style="font-size:10px;color:var(--text-3)">${r.jenis||'—'}</td>
       <td style="font-weight:600;font-size:12px">${r.giAsal||'—'}</td>
       <td style="font-weight:600;font-size:12px">${r.giTujuan||'—'}</td>
@@ -481,7 +587,24 @@ function renderCategoryPage(cat){
       <td>${statusBadge(r.statusRaw)}</td>
     </tr>`).join('');
   }
-  setText(`${p}-tbl-info`,`Menampilkan ${Math.min(30,total)} dari ${total} data`);
+
+  // Info & Pagination
+  setText(`${prefix}-tbl-info`,`Menampilkan ${Math.min(ROWS_PER_PAGE,total-(curPage-1)*ROWS_PER_PAGE)} dari ${total} data`);
+  renderPagination(total,`${prefix}-pagination`,curPage,(p)=>gotoCatPage('${cat}',p));
+
+  // Fix: inline callback tidak bisa closure, pakai global function
+  const pg=document.getElementById(`${prefix}-pagination`);
+  if(pg){
+    const tp=Math.ceil(total/ROWS_PER_PAGE);
+    const s=(curPage-1)*ROWS_PER_PAGE+1, e=Math.min(curPage*ROWS_PER_PAGE,total);
+    const mkBtn=(p,lbl,dis,active)=>`<button class="page-btn${active?' active':''}" onclick="gotoCatPage('${cat}',${p})" ${dis?'disabled':''}>${lbl}</button>`;
+    let btns=mkBtn(curPage-1,'&#8249;',curPage<=1,false);
+    pageRange(curPage,tp).forEach(p=>{
+      btns+=p==='...'?`<button class="page-btn" disabled>…</button>`:mkBtn(p,p,false,p===curPage);
+    });
+    btns+=mkBtn(curPage+1,'&#8250;',curPage>=tp,false);
+    pg.innerHTML=`<div class="page-info">Baris ${total?s:0}–${e} dari ${total}</div><div class="page-btns">${btns}</div>`;
+  }
 }
 
 /* ── Detail Modal ───────────────────────────────── */
@@ -501,7 +624,7 @@ function openDetail(pl){
       <div class="mf"><div class="mf-lbl">GI Asal</div><div class="mf-val">${d.giAsal||'—'}</div></div>
       <div class="mf"><div class="mf-lbl">GI Tujuan</div><div class="mf-val">${d.giTujuan||'—'}</div></div>
       <div class="mf"><div class="mf-lbl">Sirkuit</div><div class="mf-val">${d.sirkuit||'—'}</div></div>
-      <div class="mf"><div class="mf-lbl">Panjang (KMS)</div><div class="mf-val">${d.kms||'—'}</div></div>
+      <div class="mf"><div class="mf-lbl">KMS</div><div class="mf-val">${d.kms||'—'}</div></div>
       <div class="mf"><div class="mf-lbl">Jumlah Tower</div><div class="mf-val">${d.jmlTower||'—'}</div></div>
       <div class="mf"><div class="mf-lbl">Kondisi</div><div class="mf-val">${d.kondisi||'—'}</div></div>
     `}
@@ -525,8 +648,9 @@ function closeModal(){document.getElementById('modal').style.display='none';docu
 /* ── Export ─────────────────────────────────────── */
 function exportExcel(){
   if(!state.filtered.length){showToast('Tidak ada data','error');return;}
+  const data=[...state.filtered].sort((a,b)=>dateTs(a.expDate)-dateTs(b.expDate));
   const hdr=['No','Tipe','Jenis','Nama/Ruas','No.REG','No.SLO','Tgl Terbit','Exp.Date','Sisa Berlaku','Status','Renc.Re-SLO'];
-  const rows=state.filtered.map((r,i)=>[i+1,r.category,r.jenis,r.nama,r.noReg,r.noSlo,r.tglTerbit,r.expDate,r.sisaBerlaku,statusLabel(r.status),r.rencReSlo||'']);
+  const rows=data.map((r,i)=>[i+1,r.category,r.jenis,r.nama,r.noReg,r.noSlo,r.tglTerbit,r.expDate,r.sisaBerlaku,statusLabel(r.status),r.rencReSlo||'']);
   const ws=XLSX.utils.aoa_to_sheet([hdr,...rows]);
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Rekap SLO');
   XLSX.writeFile(wb,`Rekap_SLO_UPT_Probolinggo_${formatDate(new Date())}.xlsx`);
@@ -540,9 +664,10 @@ function exportPDF(){
   doc.text('Dashboard Rekap SLO UPT Probolinggo',14,16);
   doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(100);
   doc.text('PT PLN (Persero) UIT JBM  |  Dicetak: '+formatDate(new Date()),14,22);
+  const data=[...state.filtered].sort((a,b)=>dateTs(a.expDate)-dateTs(b.expDate));
   doc.autoTable({
     head:[['No','Tipe','Jenis','Nama/Ruas','No.SLO','Tgl Terbit','Exp.Date','Sisa Berlaku','Status']],
-    body:state.filtered.map((r,i)=>[i+1,r.category,r.jenis,r.nama,r.noSlo,r.tglTerbit,r.expDate,r.sisaBerlaku,statusLabel(r.status)]),
+    body:data.map((r,i)=>[i+1,r.category,r.jenis,r.nama,r.noSlo,r.tglTerbit,r.expDate,r.sisaBerlaku,statusLabel(r.status)]),
     startY:28,styles:{fontSize:7,cellPadding:2},
     headStyles:{fillColor:[29,78,216],textColor:255,fontStyle:'bold'},
     alternateRowStyles:{fillColor:[240,246,255]},
@@ -552,7 +677,7 @@ function exportPDF(){
   showToast('PDF berhasil diunduh','success');
 }
 function exportCategoryExcel(cat){
-  const data=cat==='gi'?state.giData:state.trsData;
+  const data=[...(cat==='gi'?state.giData:state.trsData)].sort((a,b)=>dateTs(a.expDate)-dateTs(b.expDate));
   if(!data.length){showToast('Tidak ada data','error');return;}
   let hdr,rows;
   if(cat==='gi'){
@@ -604,9 +729,9 @@ function navigate(page){
   document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
   closeSidebar();
   if(page==='dashboard'){renderStats();renderCharts();renderPreviewTable();}
-  if(page==='data')applyFilters();
-  if(page==='gi')renderCategoryPage('gi');
-  if(page==='trs')renderCategoryPage('trs');
+  if(page==='data') applyFilters();
+  if(page==='gi')   renderCategoryPage('gi');
+  if(page==='trs')  renderCategoryPage('trs');
 }
 function setCategoryFilter(cat){
   state.activeCategory=cat;
@@ -649,6 +774,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   navigate('dashboard');
 });
 
-Object.assign(window,{openDetail,closeModal,sortTable,gotoPage,navigate,setCategoryFilter,
-  onFilterChange,resetFilters,exportExcel,exportPDF,exportCategoryExcel,
-  toggleTheme,loadData,openSidebar,closeSidebar});
+/* ── Expose globals ─────────────────────────────── */
+Object.assign(window,{
+  openDetail,closeModal,sortTable,gotoPage,gotoCatPage,sortCatTable,
+  navigate,setCategoryFilter,onFilterChange,resetFilters,
+  exportExcel,exportPDF,exportCategoryExcel,
+  toggleTheme,loadData,openSidebar,closeSidebar,
+});
